@@ -1,0 +1,172 @@
+######################################################################
+## Figure 4 - Organ-specific immune-cell analysis (lung vs. gut)
+##   (A) Stacked bar of immune-cell fractions per ROI, faceted by tissue
+##       (immune-high regions only).
+##   (B) Box plot of Macrophage M1 fraction by tissue.
+##   (C) PLS-R observed vs. predicted M1 macrophage fraction across all
+##       53 ROIs, using the other 21 immune cell types as predictors.
+##   (D) VIP score vs. PLS coefficient for the M1 PLS-R model.
+##
+## Data:
+##   absolute cell fraction.csv   - immune-high ROIs only (panels A, B)
+##   whole cell fraction.xlsx     - all 53 ROIs           (panels C, D)
+######################################################################
+
+suppressPackageStartupMessages({
+  library(here)
+  library(readxl)
+  library(readr)
+  library(tidyr)
+  library(dplyr)
+  library(ggplot2)
+  library(ggrepel)
+  library(pls)
+  library(patchwork)
+})
+
+## ---- Standard PLS VIP helper ---------------------------------------
+## VIP_j = sqrt(p * sum_a (SSY_a * w_aj^2 / sum_k w_ak^2) / sum_a SSY_a)
+## (Wold et al., textbook PLS VIP). mean(VIP^2) = 1 so VIP > 1 is the
+## conventional "above-average importance" cutoff.
+##
+## The SAME function definition appears in Figure 1.R, Figure 2.R,
+## Figure 3.R, and Figure 4.R - one VIP computation across the whole
+## protocol. If you ever change it, change it in all four files.
+pls_vip <- function(model, ncomp) {
+  W <- model$loading.weights[, 1:ncomp, drop = FALSE]
+  T <- model$scores[,         1:ncomp, drop = FALSE]
+  Q <- model$Yloadings[,      1:ncomp, drop = FALSE]
+  p <- nrow(W)
+  SSY <- as.numeric(Q)^2 * colSums(T * T)
+  Wn  <- sweep(W^2, 2, colSums(W^2), "/")
+  as.numeric(sqrt(p * (Wn %*% SSY) / sum(SSY)))
+}
+
+## ---- Paths (relative to repo root, resolved via here::here) --------
+ABS_FILE <- here::here("Cell Rep data", "absolute cell fraction.csv")
+ALL_FILE <- here::here("Cell Rep data", "whole cell fraction.xlsx")
+OUT_PDF  <- here::here("figures", "Figure 4.pdf")
+OUT_TIFF <- here::here("figures", "Figure 4.tiff")
+
+abs_d <- read_csv(ABS_FILE, show_col_types = FALSE)
+all_d <- read_excel(ALL_FILE)
+
+cell_cols <- setdiff(
+  colnames(abs_d),
+  c("Tissue", "ROI", "Mixture", "P-value", "Correlation",
+    "RMSE", "Absolute score (sig.score)")
+)
+
+## ---- Panel A: stacked bar of immune-cell fractions -----------------
+long_d <- abs_d %>%
+  select(Tissue, ROI, all_of(cell_cols)) %>%
+  pivot_longer(-c(Tissue, ROI),
+               names_to = "Cell_Type", values_to = "Fraction")
+
+palette22 <- c("#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+               "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
+               "#1a55ff", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
+               "#c49c94", "#f7b6d2", "#c7c7c7", "#dbdb8d", "#9edae5",
+               "#6b6ecf", "#b5cf6b")
+
+p_A <- ggplot(long_d,
+              aes(factor(ROI), Fraction, fill = Cell_Type)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = palette22) +
+  facet_wrap(~ Tissue, scales = "free_x") +
+  labs(x = "ROI #", y = "Fraction of Immune Cells",
+       title = "Cell distribution per ROI (immune-high)") +
+  theme_classic(base_size = 10) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        legend.title = element_blank(),
+        legend.text  = element_text(size = 7),
+        legend.key.size = unit(8, "pt"),
+        plot.title = element_text(hjust = 0.5))
+
+## ---- Panel B: M1 macrophage box plot -------------------------------
+p_B <- ggplot(abs_d, aes(Tissue, `Macrophages M1`, fill = Tissue)) +
+  geom_boxplot(outlier.shape = NA, width = 0.55, alpha = 0.85) +
+  geom_jitter(width = 0.15, color = "black", size = 1.6, alpha = 0.7) +
+  scale_fill_manual(values = c("lung" = "#FFC0CB", "GI" = "#ADD8E6")) +
+  labs(title = "Macrophage M1 fraction by tissue",
+       x = "Tissue", y = "Macrophage M1 Fraction") +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none")
+
+## ---- Fit PLS-R for panels C, D -------------------------------------
+X_all <- all_d %>%
+  select(-c("ROI", "Tissue", "Mixture",
+            "P-value", "Correlation", "RMSE",
+            "Absolute score (sig.score)",
+            "Macrophages M1"))
+Y_all <- all_d[["Macrophages M1"]]
+
+ncomp_max <- 10
+pls_m1 <- plsr(Y_all ~ ., data = data.frame(Y_all = Y_all, X_all),
+               ncomp = ncomp_max, validation = "CV", scale = TRUE)
+
+ncomp_use <- 10
+preds <- as.numeric(predict(pls_m1, ncomp = ncomp_use))
+
+## ---- Panel C: observed vs. predicted M1 ----------------------------
+df_C <- data.frame(Observed  = Y_all,
+                   Predicted = preds,
+                   Tissue    = factor(all_d$Tissue,
+                                      levels = c("lung", "GI")))
+
+p_C <- ggplot(df_C, aes(Observed, Predicted, shape = Tissue)) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linewidth = 0.6) +
+  geom_point(size = 2.2, stroke = 0.8) +
+  scale_shape_manual(values = c("lung" = 3, "GI" = 1)) +
+  labs(title = "M1 Macrophages: actual vs. predicted",
+       x = "Observed Values", y = "Predicted Values") +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = c(0.12, 0.88),
+        legend.title = element_blank(),
+        legend.background = element_rect(fill = NA, color = NA))
+
+## ---- Panel D: VIP-coefficient plot ---------------------------------
+## VIP via the shared `pls_vip` helper at the top of this file
+## (identical helper in Figures 1-4) at ncomp_use = 10.
+vip_vals <- pls_vip(pls_m1, ncomp_use)
+coef_v   <- coef(pls_m1, ncomp = ncomp_use)
+
+dat_D <- data.frame(
+  Cell       = colnames(X_all),
+  Importance = vip_vals,
+  Coef       = as.numeric(coef_v)
+)
+dat_D$above <- dat_D$Importance > 1.0    # standard VIP cutoff (1.0 in PLS literature)
+
+p_D <- ggplot(dat_D, aes(Coef, Importance)) +
+  geom_hline(yintercept = 1.0,  linetype = "dashed", color = "blue") +
+  geom_vline(xintercept = 0,    linetype = "dashed", color = "black") +
+  geom_point(data = subset(dat_D, !above), color = "grey60", size = 1.6) +
+  geom_point(data = subset(dat_D,  above), color = "red",    size = 2.0) +
+  geom_text_repel(data = subset(dat_D, above),
+                  aes(label = Cell),
+                  size = 3, box.padding = 0.35,
+                  max.overlaps = Inf,
+                  segment.color = "grey50", segment.size = 0.3) +
+  labs(title = "VIP Scores vs. Coefficients (M1 PLS-R)",
+       x = "Coefficient", y = "VIP Score") +
+  theme_classic(base_size = 11) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+## ---- Compose 2 x 2 layout and write outputs ------------------------
+fig4 <- (p_A | p_B) / (p_C | p_D) +
+  plot_layout(heights = c(1, 1)) +
+  plot_annotation(tag_levels = "A") &
+  theme(plot.tag = element_text(face = "bold", size = 13))
+
+cairo_pdf(OUT_PDF, width = 13, height = 9.5, family = "Helvetica")
+print(fig4)
+dev.off()
+
+ggsave(OUT_TIFF, fig4, width = 13, height = 9.5,
+       dpi = 300, compression = "lzw")
+
+cat("Wrote ", OUT_PDF,  "\n", sep = "")
+cat("Wrote ", OUT_TIFF, "\n", sep = "")

@@ -1,0 +1,23 @@
+# R session and history files
+.Rhistory
+.RData
+.Rproj.user/
+.Ruserdata
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Per-user RStudio workspace state
+*.Rproj.user
+
+# Caches (knitr / rmarkdown / quarto, if anyone ever adds those)
+*_cache/
+*_files/
+.quarto/
+
+# Endnote / Office lock files
+~$*
+*.tmp
