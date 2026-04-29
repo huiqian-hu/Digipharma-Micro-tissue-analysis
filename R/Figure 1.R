@@ -130,7 +130,7 @@ p_C <- ggplot(dat_C, aes(Coef, Importance)) +
 fig1 <- (p_A / p_B / p_C) +
   plot_annotation(tag_levels = "A") &
   theme(plot.tag = element_text(face = "bold", size = 13))
-
+## If you did not install cairo package, replace "cairo_pdf" with "pdf"
 cairo_pdf(OUT_PDF, width = 6.8, height = 11.5, family = "Helvetica")
 print(fig1)
 dev.off()
