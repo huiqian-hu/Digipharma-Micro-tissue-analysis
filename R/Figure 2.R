@@ -69,14 +69,15 @@ roc_panel <- function(roc_obj, title, auc_x = 0.40, auc_y = 0.08) {
     annotate("text", x = auc_x, y = auc_y,
              label = sprintf("AUC = %.3f", auc_v)) +
     labs(title = title, x = "Specificity", y = "Sensitivity") +
-    theme_classic(base_size = 11) +
-    theme(plot.title = element_text(hjust = 0.5))
+    theme_classic(base_size = 10) +
+    theme(plot.title = element_text(hjust = 0.5, size = 10))
 }
 
 ## ---- Paths (relative to repo root, resolved via here::here) --------
 ROI_FILE    <- here::here("Nat commun data", "Raw data_plsda round 2.xlsx")
 ROUND1_FILE <- here::here("Nat commun data", "Raw data_plsda round 1.xlsx")
 OUT_PDF     <- here::here("figures", "Figure 2.pdf")
+OUT_JPG     <- here::here("figures", "Figure 2.jpg")
 
 ## ---- Panel A: round-1 PLS-DA on 11 proteins ------------------------
 r1 <- read_excel(ROUND1_FILE, sheet = "Sheet1")
@@ -116,8 +117,8 @@ p_A <- ggplot(vip_dat, aes(Coef, Importance)) +
                   max.overlaps = Inf) +
   labs(title = "VIP Scores vs. Coefficients",
        x = "Coefficient", y = "VIP Score") +
-  theme_classic(base_size = 11) +
-  theme(plot.title = element_text(hjust = 0))
+  theme_classic(base_size = 10) +
+  theme(plot.title = element_text(hjust = 0, size = 10))
 
 ## ---- Read ROI-level predictions ------------------------------------
 roi_data <- read_excel(ROI_FILE, sheet = "Sheet1")
@@ -135,10 +136,12 @@ p_B <- ggplot(roi_data,
   geom_jitter(width = 0.18, color = "black", size = 1.4, alpha = 0.6) +
   scale_fill_manual(values = c("Nonresponder" = "lightblue",
                                "Responder"    = "lightpink")) +
-  labs(title = paste0("GBM-Pembro - >25% CD45+ ROIs\n", formula_lbl),
-       x = "Molecular Response Group", y = "Predictions") +
-  theme_classic(base_size = 11) +
+  labs(title = ">25% CD45+ ROIs",
+       subtitle = formula_lbl,
+       x = "Molecular Response", y = "Predictions") +
+  theme_classic(base_size = 10) +
   theme(plot.title = element_text(size = 9, hjust = 0),
+        plot.subtitle = element_text(size = 7, hjust = 0),
         legend.position = "none")
 
 ## ---- Panel C: ROI-level ROC ----------------------------------------
@@ -168,10 +171,10 @@ p_D <- ggplot(tissue_data,
   annotate("text", x = 1.5,
            y = max(tissue_data$mean_pred) + 0.10,
            label = sprintf("p = %.3f", mw$p.value), size = 3.5) +
-  labs(title = "Tissue-level (mean per Sample ID)",
-       x = "Molecular Response Group", y = "Tissue-level Prediction") +
-  theme_classic(base_size = 11) +
-  theme(plot.title = element_text(hjust = 0.5),
+  labs(title = "Tissue-level prediction",
+       x = "Molecular Response", y = "Mean Prediction") +
+  theme_classic(base_size = 10) +
+  theme(plot.title = element_text(hjust = 0.5, size = 10),
         legend.position = "none")
 
 ## ---- Panel E: tissue-level ROC -------------------------------------
@@ -185,8 +188,9 @@ fig2 <- (top / middle / bottom) +
   plot_layout(heights = c(1.1, 1, 1)) +
   plot_annotation(tag_levels = list(c("A", "B", "C", "D", "E"))) &
   theme(plot.tag = element_text(face = "bold", size = 13))
-
-pdf(OUT_PDF, width = 9.0, height = 11.5, family = "Helvetica")
+pdf(OUT_PDF, width = 6.7, height = 8, family = "Helvetica")
 print(fig2)
 dev.off()
 cat("Wrote ", OUT_PDF, "\n", sep = "")
+ggsave(OUT_JPG, fig2, width = 6.7, height = 8, dpi = 300)
+cat("Wrote ", OUT_JPG, "\n", sep = "")
