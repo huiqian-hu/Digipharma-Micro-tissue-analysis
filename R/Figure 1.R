@@ -1,8 +1,8 @@
 ######################################################################
 ## Figure 1 - PLS-R analysis of CD8A in immune-rich GBM ROIs
 ##
-## (A) Observed vs. predicted CD8A from a 10-component PLS-R model
-## (B) MSEP curve vs. number of components (cross-validated)
+## (A) MSEP curve vs. number of components (cross-validated)
+## (B) Observed vs. predicted CD8A from an 8-component PLS-R model
 ## (C) VIP score vs. PLS coefficient for each protein
 ##
 ## Data: Raw data.xlsx, sheet "GBM" (168 ROIs from Lu et al., 2021).
@@ -42,6 +42,7 @@ pls_vip <- function(model, ncomp) {
 ## ---- Paths (relative to repo root, resolved via here::here) --------
 DATA    <- here::here("Nat commun data", "Raw data.xlsx")
 OUT_PDF <- here::here("figures", "Figure 1.pdf")
+OUT_JPG <- here::here("figures", "Figure 1.jpg")
 
 ## ---- 1. Load and filter to immune-rich (>25% CD45+) ----------------
 gbm <- read_excel(DATA, sheet = "GBM")
@@ -55,13 +56,22 @@ ncomp_max <- 20
 plsr.mod  <- plsr(Y ~ ., data = data.frame(Y = Y, X), ncomp = ncomp_max,
                   validation = "CV", scale = TRUE)
 
-ncomp_use <- 10
-preds <- as.numeric(predict(plsr.mod, ncomp = ncomp_use))
-cat(sprintf("R2 (Y, ncomp=%d) = %.3f\n",
-            ncomp_use,
-            1 - sum((Y - preds)^2) / sum((Y - mean(Y))^2)))
+ncomp_use <- 8
+preds    <- as.numeric(predict(plsr.mod, ncomp = ncomp_use))
+cv_preds <- as.numeric(plsr.mod$validation$pred[, 1, ncomp_use])
 
-## ---- 3. Panel A: observed vs. predicted ----------------------------
+## PLS model-quality metrics (Wold et al., 2001):
+##   R2X = fraction of variance in X explained by the components
+##   R2Y = fraction of variance in Y explained (training fit)
+##   Q2  = fraction of variance in Y predicted (cross-validated)
+R2X <- sum(explvar(plsr.mod)[1:ncomp_use]) / 100
+R2Y <- 1 - sum((Y - preds)^2)    / sum((Y - mean(Y))^2)
+Q2  <- 1 - sum((Y - cv_preds)^2) / sum((Y - mean(Y))^2)
+
+cat(sprintf("R2X=%.3f  R2Y=%.3f  Q2=%.3f  (ncomp=%d)\n",
+            R2X, R2Y, Q2, ncomp_use))
+
+## ---- 3. Panel B: observed vs. predicted ----------------------------
 df_pred <- data.frame(
   Observed  = Y,
   Predicted = preds,
@@ -69,10 +79,14 @@ df_pred <- data.frame(
                      levels = c("Responder", "Nonresponder"))
 )
 
+metrics_label <- sprintf("R²X=%.3f  R²Y=%.3f\nQ²=%.3f", R2X, R2Y, Q2)
+
 p_A <- ggplot(df_pred, aes(Observed, Predicted, shape = Response)) +
   geom_abline(slope = 1, intercept = 0, color = "red", linewidth = 0.6) +
   geom_point(size = 2.2, stroke = 0.8) +
   scale_shape_manual(values = c("Responder" = 3, "Nonresponder" = 1)) +
+  annotate("text", x = Inf, y = -Inf, label = metrics_label,
+           hjust = 1.1, vjust = -0.5, size = 3.5) +
   labs(title = "GBM-Pembro - >25% CD45+ cells ROIs",
        x = "Observed Values", y = "Predicted Values") +
   theme_classic(base_size = 11) +
@@ -81,7 +95,7 @@ p_A <- ggplot(df_pred, aes(Observed, Predicted, shape = Response)) +
         legend.background = element_rect(fill = NA, color = NA),
         plot.title = element_text(hjust = 0.5))
 
-## ---- 4. Panel B: MSEP curve ----------------------------------------
+## ---- 4. Panel A: MSEP curve ----------------------------------------
 msep_obj <- MSEP(plsr.mod, estimate = c("train", "CV"))
 msep_df  <- data.frame(
   ncomp = rep(0:ncomp_max, 2),
@@ -92,15 +106,29 @@ msep_df  <- data.frame(
 
 p_B <- ggplot(msep_df, aes(ncomp, MSEP, color = type, linetype = type)) +
   geom_line(linewidth = 0.7) +
-  scale_color_manual(values = c("train" = "black", "CV" = "red")) +
-  scale_linetype_manual(values = c("train" = "solid", "CV" = "dashed")) +
-  labs(x = "number of components", y = "MSEP") +
-  theme_classic(base_size = 11) +
-  theme(legend.position = "none")
+  geom_vline(xintercept = ncomp_use, linetype = "dotted",
+             color = "blue", linewidth = 0.5) +
+  annotate("text", x = ncomp_use + 0.3, y = max(msep_df$MSEP) * 0.95,
+           label = paste0("ncomp = ", ncomp_use),
+           hjust = 0, size = 3, color = "blue") +
+  scale_color_manual(breaks = c("train", "CV"),
+                     values = c("train" = "black", "CV" = "red"),
+                     labels = c("Training", "Cross-validation")) +
+  scale_linetype_manual(breaks = c("train", "CV"),
+                        values = c("train" = "solid", "CV" = "dashed"),
+                        labels = c("Training", "Cross-validation")) +
+  labs(x = "Number of components", y = "MSEP") +
+  theme_classic(base_size = 10) +
+  theme(legend.position = c(0.75, 0.85),
+        legend.title = element_blank(),
+        legend.background = element_rect(fill = alpha("white", 0.8), color = NA),
+        legend.key.width = unit(20, "pt"),
+        legend.key.height = unit(10, "pt"),
+        legend.text = element_text(size = 8))
 
 ## ---- 5. Panel C: VIP vs. coefficient -------------------------------
 ## VIP via the shared `pls_vip` helper at the top of this file
-## (identical helper in Figures 1-4) evaluated at ncomp_use = 10.
+## (identical helper in Figures 1-4) evaluated at ncomp_use.
 vip_vals <- pls_vip(plsr.mod, ncomp_use)
 coefs    <- coef(plsr.mod, ncomp = ncomp_use)
 
@@ -127,11 +155,12 @@ p_C <- ggplot(dat_C, aes(Coef, Importance)) +
   theme(plot.title = element_text(hjust = 0))
 
 ## ---- 6. Compose and write editable PDF -----------------------------
-fig1 <- (p_A / p_B / p_C) +
+fig1 <- (p_B / p_A / p_C) +
   plot_annotation(tag_levels = "A") &
   theme(plot.tag = element_text(face = "bold", size = 13))
-
-pdf(OUT_PDF, width = 6.8, height = 11.5, family = "Helvetica")
+pdf(OUT_PDF, width = 6.7, height = 8, family = "Helvetica")
 print(fig1)
 dev.off()
 cat("Wrote ", OUT_PDF, "\n", sep = "")
+ggsave(OUT_JPG, fig1, width = 6.7, height = 8, dpi = 300)
+cat("Wrote ", OUT_JPG, "\n", sep = "")
