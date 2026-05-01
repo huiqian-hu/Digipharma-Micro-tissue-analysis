@@ -46,7 +46,7 @@ pls_vip <- function(model, ncomp) {
 ## ---- Paths (relative to repo root, resolved via here::here) --------
 DATA     <- here::here("Nat commun data", "Raw data.xlsx")
 OUT_PDF  <- here::here("figures", "Figure 3.pdf")
-OUT_TIFF <- here::here("figures", "Figure 3.tiff")
+OUT_JPG  <- here::here("figures", "Figure 3.jpg")
 
 ## ---- Load and restrict to immune-poor (<25% CD45+) -----------------
 gbm <- read_excel(DATA, sheet = "GBM")
@@ -92,10 +92,10 @@ p_A <- ggplot(tissue,
            label = sprintf("p = %.3f", mw$p.value), size = 3.6) +
   scale_x_discrete(labels = c(sprintf("Nonresponder\n(n = %d)", n_nr),
                               sprintf("Responder\n(n = %d)",   n_r))) +
-  labs(title = "Tissue-level Ki67 (immune-poor regions)",
-       x = NULL, y = "Mean Ki67 count density per tissue") +
-  theme_classic(base_size = 11) +
-  theme(plot.title = element_text(hjust = 0.5),
+  labs(title = "Ki67 (immune-poor, tissue-level)",
+       x = NULL, y = "Mean Ki67 count density") +
+  theme_classic(base_size = 10) +
+  theme(plot.title = element_text(hjust = 0.5, size = 10),
         legend.position = "none")
 
 ## ---- Panel B: PLS-R Y=Ki67 on immune-poor proteins -----------------
@@ -105,7 +105,7 @@ exclude_cols <- c("Patient ID", "Sample ID", "Molecular_Response",
 X <- as.data.frame(ip[, !(names(ip) %in% exclude_cols)])
 Y <- ip$Ki67
 
-ncomp_use <- 6
+ncomp_use <- 3
 pls_ki67  <- plsr(Y ~ ., data = data.frame(Y = Y, X),
                   ncomp = ncomp_use, validation = "CV", scale = TRUE)
 
@@ -139,15 +139,16 @@ p_B <- ggplot(dat_B, aes(Coef, Importance)) +
   geom_text_repel(data = subset(dat_B, class != "other"),
                   aes(label = Protein,
                       color = class),
-                  size = 3, box.padding = 0.35,
+                  size = 2.5, box.padding = 0.25,
                   segment.color = "grey40", segment.size = 0.3,
                   max.overlaps = Inf, show.legend = FALSE) +
   scale_color_manual(values = c("spotlight" = "red",
                                 "important" = "grey25")) +
-  labs(title = "PLS-R: predictors of Ki67 in immune-poor ROIs",
+  coord_cartesian(ylim = c(0.8, NA)) +
+  labs(title = "VIP vs. Coefficient (Ki67 PLS-R)",
        x = "Coefficient", y = "VIP Score") +
-  theme_classic(base_size = 11) +
-  theme(plot.title = element_text(hjust = 0.5))
+  theme_classic(base_size = 10) +
+  theme(plot.title = element_text(hjust = 0.5, size = 10))
 
 ## ---- Panel C: B7-H3 vs IDO-1 scatter, viridis(Ki67) ----------------
 p_C <- ggplot(ip, aes(`IDO-1`, `B7-H3`,
@@ -161,21 +162,26 @@ p_C <- ggplot(ip, aes(`IDO-1`, `B7-H3`,
   labs(title = "B7-H3 and IDO-1 co-vary with Ki67 in nonresponders",
        x = "IDO-1 expression",
        y = "B7-H3 expression") +
-  theme_classic(base_size = 11) +
-  theme(plot.title = element_text(hjust = 0.5))
+  theme_classic(base_size = 10) +
+  theme(plot.title = element_text(hjust = 0.5, size = 10),
+        legend.position = c(0.88, 0.32),
+        legend.background = element_rect(fill = alpha("white", 0.8), color = NA),
+        legend.key.size = unit(8, "pt"),
+        legend.text = element_text(size = 7),
+        legend.title = element_text(size = 8))
 
 ## ---- Compose and write outputs -------------------------------------
-fig3 <- (p_A | p_B | p_C) +
-  plot_layout(widths = c(0.9, 1.1, 1.3)) +
-  plot_annotation(tag_levels = "A") &
+top3    <- (p_A | p_B) + plot_layout(widths = c(1, 1.5))
+bottom3 <- p_C
+fig3 <- (top3 / bottom3) +
+  plot_layout(heights = c(1, 1)) +
+  plot_annotation(tag_levels = list(c("A", "B", "C"))) &
   theme(plot.tag = element_text(face = "bold", size = 13))
-
-pdf(OUT_PDF, width = 14, height = 4.6, family = "Helvetica")
+pdf(OUT_PDF, width = 6.7, height = 8, family = "Helvetica")
 print(fig3)
 dev.off()
 
-ggsave(OUT_TIFF, fig3, width = 14, height = 4.6,
-       dpi = 300, compression = "lzw")
+ggsave(OUT_JPG, fig3, width = 6.7, height = 8, dpi = 300)
 
-cat("Wrote ", OUT_PDF,  "\n", sep = "")
-cat("Wrote ", OUT_TIFF, "\n", sep = "")
+cat("Wrote ", OUT_PDF, "\n", sep = "")
+cat("Wrote ", OUT_JPG, "\n", sep = "")
