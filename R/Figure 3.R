@@ -169,8 +169,8 @@ fig3 <- (p_A | p_B | p_C) +
   plot_layout(widths = c(0.9, 1.1, 1.3)) +
   plot_annotation(tag_levels = "A") &
   theme(plot.tag = element_text(face = "bold", size = 13))
-## If you did not install cairo package, replace "cairo_pdf" with "pdf"
-cairo_pdf(OUT_PDF, width = 14, height = 4.6, family = "Helvetica")
+
+pdf(OUT_PDF, width = 14, height = 4.6, family = "Helvetica")
 print(fig3)
 dev.off()
 
