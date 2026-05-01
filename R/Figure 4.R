@@ -160,8 +160,8 @@ fig4 <- (p_A | p_B) / (p_C | p_D) +
   plot_layout(heights = c(1, 1)) +
   plot_annotation(tag_levels = "A") &
   theme(plot.tag = element_text(face = "bold", size = 13))
-## If you did not install cairo package, replace "cairo_pdf" with "pdf"
-cairo_pdf(OUT_PDF, width = 13, height = 9.5, family = "Helvetica")
+
+pdf(OUT_PDF, width = 13, height = 9.5, family = "Helvetica")
 print(fig4)
 dev.off()
 
