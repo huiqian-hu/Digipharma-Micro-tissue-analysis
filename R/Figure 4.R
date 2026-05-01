@@ -46,7 +46,7 @@ pls_vip <- function(model, ncomp) {
 ABS_FILE <- here::here("Cell Rep data", "absolute cell fraction.csv")
 ALL_FILE <- here::here("Cell Rep data", "whole cell fraction.xlsx")
 OUT_PDF  <- here::here("figures", "Figure 4.pdf")
-OUT_TIFF <- here::here("figures", "Figure 4.tiff")
+OUT_JPG  <- here::here("figures", "Figure 4.jpg")
 
 abs_d <- read_csv(ABS_FILE, show_col_types = FALSE)
 all_d <- read_excel(ALL_FILE)
@@ -79,19 +79,21 @@ p_A <- ggplot(long_d,
   theme_classic(base_size = 10) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
         legend.title = element_blank(),
-        legend.text  = element_text(size = 7),
-        legend.key.size = unit(8, "pt"),
-        plot.title = element_text(hjust = 0.5))
+        legend.text  = element_text(size = 5.5),
+        legend.key.size = unit(6, "pt"),
+        legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5, size = 10)) +
+  guides(fill = guide_legend(nrow = 5))
 
 ## ---- Panel B: M1 macrophage box plot -------------------------------
 p_B <- ggplot(abs_d, aes(Tissue, `Macrophages M1`, fill = Tissue)) +
   geom_boxplot(outlier.shape = NA, width = 0.55, alpha = 0.85) +
   geom_jitter(width = 0.15, color = "black", size = 1.6, alpha = 0.7) +
   scale_fill_manual(values = c("lung" = "#FFC0CB", "GI" = "#ADD8E6")) +
-  labs(title = "Macrophage M1 fraction by tissue",
-       x = "Tissue", y = "Macrophage M1 Fraction") +
-  theme_classic(base_size = 11) +
-  theme(plot.title = element_text(hjust = 0.5),
+  labs(title = "M1 fraction by tissue",
+       x = "Tissue", y = "M1 Fraction") +
+  theme_classic(base_size = 10) +
+  theme(plot.title = element_text(hjust = 0.5, size = 10),
         legend.position = "none")
 
 ## ---- Fit PLS-R for panels C, D -------------------------------------
@@ -106,10 +108,22 @@ ncomp_max <- 10
 pls_m1 <- plsr(Y_all ~ ., data = data.frame(Y_all = Y_all, X_all),
                ncomp = ncomp_max, validation = "CV", scale = TRUE)
 
-ncomp_use <- 10
-preds <- as.numeric(predict(pls_m1, ncomp = ncomp_use))
+ncomp_use <- 8
+preds    <- as.numeric(predict(pls_m1, ncomp = ncomp_use))
+cv_preds <- as.numeric(pls_m1$validation$pred[, 1, ncomp_use])
+
+## PLS model-quality metrics (Wold et al., 2001)
+R2X_m1 <- sum(explvar(pls_m1)[1:ncomp_use]) / 100
+R2Y_m1 <- 1 - sum((Y_all - preds)^2)    / sum((Y_all - mean(Y_all))^2)
+Q2_m1  <- 1 - sum((Y_all - cv_preds)^2) / sum((Y_all - mean(Y_all))^2)
+
+cat(sprintf("M1 PLS-R: R2X=%.3f  R2Y=%.3f  Q2=%.3f  (ncomp=%d)\n",
+            R2X_m1, R2Y_m1, Q2_m1, ncomp_use))
 
 ## ---- Panel C: observed vs. predicted M1 ----------------------------
+metrics_label_m1 <- sprintf("R²X=%.3f  R²Y=%.3f\nQ²=%.3f",
+                            R2X_m1, R2Y_m1, Q2_m1)
+
 df_C <- data.frame(Observed  = Y_all,
                    Predicted = preds,
                    Tissue    = factor(all_d$Tissue,
@@ -117,19 +131,21 @@ df_C <- data.frame(Observed  = Y_all,
 
 p_C <- ggplot(df_C, aes(Observed, Predicted, shape = Tissue)) +
   geom_abline(slope = 1, intercept = 0, color = "red", linewidth = 0.6) +
-  geom_point(size = 2.2, stroke = 0.8) +
+  geom_point(size = 1.5, stroke = 0.5) +
   scale_shape_manual(values = c("lung" = 3, "GI" = 1)) +
-  labs(title = "M1 Macrophages: actual vs. predicted",
-       x = "Observed Values", y = "Predicted Values") +
-  theme_classic(base_size = 11) +
-  theme(plot.title = element_text(hjust = 0.5),
+  annotate("text", x = Inf, y = -Inf, label = metrics_label_m1,
+           hjust = 1.1, vjust = -0.5, size = 3) +
+  labs(title = "M1: actual vs. predicted",
+       x = "Observed", y = "Predicted") +
+  theme_classic(base_size = 10) +
+  theme(plot.title = element_text(hjust = 0.5, size = 10),
         legend.position = c(0.12, 0.88),
         legend.title = element_blank(),
         legend.background = element_rect(fill = NA, color = NA))
 
 ## ---- Panel D: VIP-coefficient plot ---------------------------------
 ## VIP via the shared `pls_vip` helper at the top of this file
-## (identical helper in Figures 1-4) at ncomp_use = 10.
+## (identical helper in Figures 1-4) at ncomp_use = 8.
 vip_vals <- pls_vip(pls_m1, ncomp_use)
 coef_v   <- coef(pls_m1, ncomp = ncomp_use)
 
@@ -147,26 +163,25 @@ p_D <- ggplot(dat_D, aes(Coef, Importance)) +
   geom_point(data = subset(dat_D,  above), color = "red",    size = 2.0) +
   geom_text_repel(data = subset(dat_D, above),
                   aes(label = Cell),
-                  size = 3, box.padding = 0.35,
+                  size = 2.5, box.padding = 0.25,
                   max.overlaps = Inf,
                   segment.color = "grey50", segment.size = 0.3) +
-  labs(title = "VIP Scores vs. Coefficients (M1 PLS-R)",
+  labs(title = "VIP vs. Coefficient (M1 PLS-R)",
        x = "Coefficient", y = "VIP Score") +
-  theme_classic(base_size = 11) +
-  theme(plot.title = element_text(hjust = 0.5))
+  theme_classic(base_size = 10) +
+  theme(plot.title = element_text(hjust = 0.5, size = 10))
 
 ## ---- Compose 2 x 2 layout and write outputs ------------------------
-fig4 <- (p_A | p_B) / (p_C | p_D) +
-  plot_layout(heights = c(1, 1)) +
-  plot_annotation(tag_levels = "A") &
+mid4 <- p_B | p_C
+fig4 <- (p_A / mid4 / p_D) +
+  plot_layout(heights = c(1.3, 1, 1)) +
+  plot_annotation(tag_levels = list(c("A", "B", "C", "D"))) &
   theme(plot.tag = element_text(face = "bold", size = 13))
-
-pdf(OUT_PDF, width = 13, height = 9.5, family = "Helvetica")
+pdf(OUT_PDF, width = 6.7, height = 8, family = "Helvetica")
 print(fig4)
 dev.off()
 
-ggsave(OUT_TIFF, fig4, width = 13, height = 9.5,
-       dpi = 300, compression = "lzw")
+ggsave(OUT_JPG, fig4, width = 6.7, height = 8, dpi = 300)
 
-cat("Wrote ", OUT_PDF,  "\n", sep = "")
-cat("Wrote ", OUT_TIFF, "\n", sep = "")
+cat("Wrote ", OUT_PDF, "\n", sep = "")
+cat("Wrote ", OUT_JPG, "\n", sep = "")
