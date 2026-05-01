@@ -185,8 +185,8 @@ fig2 <- (top / middle / bottom) +
   plot_layout(heights = c(1.1, 1, 1)) +
   plot_annotation(tag_levels = list(c("A", "B", "C", "D", "E"))) &
   theme(plot.tag = element_text(face = "bold", size = 13))
-## If you did not install cairo package, replace "cairo_pdf" with "pdf"
-cairo_pdf(OUT_PDF, width = 9.0, height = 11.5, family = "Helvetica")
+
+pdf(OUT_PDF, width = 9.0, height = 11.5, family = "Helvetica")
 print(fig2)
 dev.off()
 cat("Wrote ", OUT_PDF, "\n", sep = "")
